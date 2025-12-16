@@ -28,14 +28,22 @@ if [ "$KEY3" != "null" ]; then
 	PART3=$(DECRYPT_AES $(echo -n $ENC_INPUTS | jq -r '.["3"]') $KEY3 $IV3)
 fi
 
-echo -n '{'
-echo -n '"1":"'
-echo -n $PART1
-echo -n '",'
-echo -n '"2":"'
-echo -n $PART2
-echo -n '",'
-echo -n '"3":"'
-echo -n $PART3
-echo -n '"'
-echo -n '}'
+if [ $# == 0 ]; then
+	echo -n '{'
+	echo -n '"1":"'
+	echo -n $PART1
+	echo -n '",'
+	echo -n '"2":"'
+	echo -n $PART2
+	echo -n '",'
+	echo -n '"3":"'
+	echo -n $PART3
+	echo -n '"'
+	echo -n '}'
+elif [ $1 == 1 ]; then
+	echo -n $PART1
+elif [ $1 == 2 ]; then
+	echo -n $PART2
+elif [ $1 == 3 ]; then
+	echo -n $PART3
+fi
