@@ -31,6 +31,7 @@ static constexpr std::string ansi_color(int col) {
   return std::string{CSI "38;5;"} + std::to_string(col) + 'm';
 }
 
+static constexpr std::string ansi_bold() { return CSI "1m"; }
 static constexpr std::string ansi_reset() { return CSI "0m"; }
 
 static constexpr std::string ansi_to_left_column() { return "\r"; }
@@ -100,8 +101,9 @@ static void task_thread(const ec::Runtime &rt) {
         experiments.at(exp_num - 1).running = true;
       }
 
+      auto &part = get_part_n(rt, exp_num);
       auto start = std::chrono::high_resolution_clock::now();
-      std::string value = get_part_n(rt, exp_num).impl("");
+      std::string value = part.impl(part.input.filename);
       auto end = std::chrono::high_resolution_clock::now();
 
       {
@@ -207,12 +209,56 @@ ec::Runtime::Runtime(int argc, char *argv[]) {
       argc -= 2;
       argv += 2;
       continue;
+    } else if (arg == "--runtests" || arg == "-t") {
+      non_interactive_run_tests = true;
+      argc -= 1;
+      argv += 1;
+      continue;
+    } else if (arg == "--test" || arg == "-T") {
+      if (argc < 2) {
+        std::println("ERROR: {} expects a number", arg);
+        break;
+      }
+
+      std::string number_str = argv[1];
+      try {
+        int number = std::stoi(number_str);
+        if (number < 0) {
+          std::println(
+              "ERROR: test number should be greater or equal to 0, not {}",
+              number);
+          break;
+        }
+        non_interactive_test_to_run = number;
+        non_interactive_run_tests = true;
+      } catch (std::logic_error e) {
+        std::println("ERROR: expected a number after {}, not {}", arg,
+                     number_str);
+        break;
+      }
+
+      argc -= 2;
+      argv += 2;
+      continue;
     }
 
     // Unknown argument
     std::println("ERROR: Unknown argument: {}", arg);
     break;
   }
+}
+
+static std::pair<std::string, long long> run(const ec::Part &part,
+                                             const ec::Input &input) {
+  auto begin_time = std::chrono::high_resolution_clock::now();
+  auto result = part.impl(input.filename);
+  auto end_time = std::chrono::high_resolution_clock::now();
+
+  auto duration = end_time - begin_time;
+  auto milliseconds =
+      std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+
+  return {result, milliseconds};
 }
 
 static void run_interactive(const ec::Runtime &rt) {
@@ -258,6 +304,68 @@ static void run_interactive(const ec::Runtime &rt) {
   }
 }
 
+static void run_tests(const ec::Runtime &rt, const ec::Part &part) {
+  if (rt.non_interactive_test_to_run == -1) { // Run all tests
+    if (part.tests.size() == 0) {
+      std::println("WARNING: no tests");
+    }
+
+    for (const auto &test : part.tests) {
+      auto [result, milliseconds] = run(part, test);
+
+      bool good = result == test.expected_result;
+
+      if (good) {
+        std::print("{}✔️{} ", ansi_color(2), ansi_reset());
+      } else {
+        std::print("{}{}X {} ", ansi_color(1), ansi_bold(), ansi_reset());
+      }
+
+      std::print("{} -> {}{}{} - {}{}ms{}", test.filename, ansi_color(123),
+                 result, ansi_reset(), ansi_color(242), milliseconds,
+                 ansi_reset());
+
+      if (!good) {
+        std::print(" (expected {})", test.expected_result);
+      }
+
+      std::println();
+    }
+  } else {
+    if (part.tests.size() == 0) {
+      std::println("ERROR: no tests");
+      return;
+    }
+    if (rt.non_interactive_test_to_run > part.tests.size() - 1) {
+      std::println(
+          "ERROR: test number should be less than tests count ({}), not {}",
+          part.tests.size(), rt.non_interactive_test_to_run);
+      return;
+    }
+
+    auto &test = part.tests.at(rt.non_interactive_test_to_run);
+    auto [result, milliseconds] = run(part, test);
+
+    bool good = result == test.expected_result;
+
+    if (good) {
+      std::print("{}✔️{} ", ansi_color(2), ansi_reset());
+    } else {
+      std::print("{}{}X {} ", ansi_color(1), ansi_bold(), ansi_reset());
+    }
+
+    std::print("{} -> {}{}{} - {}{}ms{}", test.filename, ansi_color(123),
+               result, ansi_reset(), ansi_color(242), milliseconds,
+               ansi_reset());
+
+    if (!good) {
+      std::print(" (expected {})", test.expected_result);
+    }
+
+    std::println();
+  }
+}
+
 static void run_noninteractive(const ec::Runtime &rt) {
   if (rt.non_interactive_part == 0) {
     std::println("ERROR: part number not set");
@@ -266,15 +374,20 @@ static void run_noninteractive(const ec::Runtime &rt) {
 
   auto &part = get_part_n(rt, rt.non_interactive_part);
 
-  auto begin_time = std::chrono::high_resolution_clock::now();
-  auto result = part.impl("");
-  auto end_time = std::chrono::high_resolution_clock::now();
+  if (!part.impl) {
+    std::println("ERROR: part {} is not defined", rt.non_interactive_part);
+    return;
+  }
 
-  auto duration = end_time - begin_time;
-  auto milliseconds =
-      std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+  if (rt.non_interactive_run_tests) {
+    run_tests(rt, part);
+    return;
+  }
 
-  std::println("{} - {}ms", result, milliseconds);
+  auto [result, milliseconds] = run(part, part.input);
+
+  std::println("{}{}{} - {}{}ms{}", ansi_color(123), result, ansi_reset(),
+               ansi_color(242), milliseconds, ansi_reset());
 }
 
 void ec::Runtime::run() {
