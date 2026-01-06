@@ -6,6 +6,7 @@
 #include <print>
 #include <queue>
 #include <ratio>
+#include <stdexcept>
 #include <termios.h>
 #include <thread>
 #include <unistd.h>
@@ -164,9 +165,59 @@ static void draw(const ec::Runtime &rt) {
   std::print("{}", ansi_up_n(3));
 }
 
-void ec::Runtime::run() {
+ec::Runtime::Runtime(int argc, char *argv[]) {
+  argc -= 1;
+  argv += 1;
+
+  while (argc > 0) {
+    std::string arg = argv[0];
+
+    if (arg == "--interactive" || arg == "-i") {
+      interactive = true;
+      argc -= 1;
+      argv += 1;
+      continue;
+    } else if (arg == "--noninteractive" || arg == "-I") {
+      interactive = false;
+      argc -= 1;
+      argv += 1;
+      continue;
+    } else if (arg == "--part" || arg == "-p") {
+      if (argc < 2) {
+        std::println("ERROR: {} expects a number", arg);
+        break;
+      }
+
+      std::string number_str = argv[1];
+      try {
+        int number = std::stoi(number_str);
+        if (number > 3 || number < 1) {
+          std::println("ERROR: part number should be between 1 and 3, not {}",
+                       number);
+          break;
+        }
+        non_interactive_part = number;
+        interactive = false;
+      } catch (std::logic_error e) {
+        std::println("ERROR: expected a number after {}, not {}", arg,
+                     number_str);
+        break;
+      }
+
+      argc -= 2;
+      argv += 2;
+      continue;
+    }
+
+    // Unknown argument
+    std::println("ERROR: Unknown argument: {}", arg);
+    break;
+  }
+}
+
+static void run_interactive(const ec::Runtime &rt) {
   std::jthread input{input_thread};
-  std::jthread task{task_thread, std::ref(*this)};
+  std::jthread task{task_thread, std::ref(rt)};
 
   while (true) {
     std::unique_lock lock{input_queue_mutex};
@@ -203,6 +254,33 @@ void ec::Runtime::run() {
       lock.lock();
     }
 
-    draw(*this);
+    draw(rt);
+  }
+}
+
+static void run_noninteractive(const ec::Runtime &rt) {
+  if (rt.non_interactive_part == 0) {
+    std::println("ERROR: part number not set");
+    return;
+  }
+
+  auto &part = get_part_n(rt, rt.non_interactive_part);
+
+  auto begin_time = std::chrono::high_resolution_clock::now();
+  auto result = part.impl("");
+  auto end_time = std::chrono::high_resolution_clock::now();
+
+  auto duration = end_time - begin_time;
+  auto milliseconds =
+      std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+
+  std::println("{} - {}ms", result, milliseconds);
+}
+
+void ec::Runtime::run() {
+  if (interactive == false) {
+    run_noninteractive(*this);
+  } else {
+    run_interactive(*this);
   }
 }
