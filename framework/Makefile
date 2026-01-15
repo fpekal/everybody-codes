@@ -2,7 +2,7 @@ libeverybody-codes.a: everybody-codes.o
 	ar rcs libeverybody-codes.a everybody-codes.o
 
 everybody-codes.o:
-	g++ -O2 -std=c++26 -o everybody-codes.o -c src/everybody-codes.cpp
+	g++ -O2 -std=c++26 -DUTILS_DIR="${UTILS_DIR}" -o everybody-codes.o -c src/everybody-codes.cpp $(pkg-config --cflags --libs nlohmann_json)
 
 install:
 	mkdir -p ${out}/lib

@@ -29,5 +29,6 @@ public:
   int non_interactive_test_to_run = -1;
   bool non_interactive_run_tests = false;
   bool interactive = true;
+  bool do_download_inputs = false;
 };
 } // namespace ec

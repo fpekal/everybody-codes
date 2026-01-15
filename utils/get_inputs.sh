@@ -1,3 +1,5 @@
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
 DECRYPT_AES() {
 	echo -n "$1" |
 		xxd -r -p |
@@ -6,7 +8,7 @@ DECRYPT_AES() {
 			-iv $(echo -n "$3" | xxd -p -c 256)
 }
 
-SECRETS=$(./get_secrets.sh)
+SECRETS=$($SCRIPT_DIR/get_secrets.sh)
 KEY1=$(echo $SECRETS | jq -r .key1)
 IV1=${KEY1:0:16}
 
@@ -16,7 +18,7 @@ IV2=${KEY2:0:16}
 KEY3=$(echo $SECRETS | jq -r .key3)
 IV3=${KEY3:0:16}
 
-ENC_INPUTS=$(./get_encrypted_inputs.sh)
+ENC_INPUTS=$($SCRIPT_DIR/get_encrypted_inputs.sh)
 
 if [ "$KEY1" != "null" ]; then
 	PART1=$(DECRYPT_AES $(echo -n $ENC_INPUTS | jq -r '.["1"]') $KEY1 $IV1)

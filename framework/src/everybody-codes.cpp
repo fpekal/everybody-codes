@@ -1,7 +1,9 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <mutex>
 #include <print>
 #include <queue>
@@ -11,7 +13,17 @@
 #include <thread>
 #include <unistd.h>
 
+#include <nlohmann/json.hpp>
+
 #include "../include/everybody-codes.h"
+
+#define STR_IMPL(x) #x
+#define STR(x) STR_IMPL(x)
+
+#ifndef UTILS_DIR
+#define UTILS_DIR /
+#endif
+#define UTILS_DIR_STR STR(UTILS_DIR)
 
 static bool has_part_n(const ec::Runtime &rt, int n) {
   if (n == 1) {
@@ -240,6 +252,11 @@ ec::Runtime::Runtime(int argc, char *argv[]) {
       argc -= 2;
       argv += 2;
       continue;
+    } else if (arg == "--download-inputs") {
+      do_download_inputs = true;
+      argc -= 1;
+      argv += 1;
+      continue;
     }
 
     // Unknown argument
@@ -390,7 +407,63 @@ static void run_noninteractive(const ec::Runtime &rt) {
                ansi_color(242), milliseconds, ansi_reset());
 }
 
+static std::string exec(const char *cmd) {
+  std::array<char, 128> buffer;
+  std::string result;
+
+  auto pipe = popen(cmd, "r"); // get rid of shared_ptr
+
+  if (!pipe)
+    throw std::runtime_error("popen() failed!");
+
+  while (!feof(pipe)) {
+    if (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
+      result += buffer.data();
+  }
+
+  auto rc = pclose(pipe);
+
+  return result;
+}
+
+static void download_inputs() {
+  std::ignore = std::system("mkdir inputs 2>/dev/null");
+
+  std::string output = exec(UTILS_DIR_STR "/get_inputs.sh"
+                                          " 2>/dev/null");
+
+  auto json = nlohmann::json::parse(output);
+
+  std::string part2 = json["2"].get<std::string>();
+  std::string part3 = json["3"].get<std::string>();
+
+  {
+    std::ofstream file{"inputs/input1.txt", std::ios::binary};
+    std::string input = json["1"].get<std::string>();
+
+    file << input;
+  }
+
+  {
+    std::ofstream file{"inputs/input2.txt", std::ios::binary};
+    std::string input = json["2"].get<std::string>();
+
+    file << input;
+  }
+
+  {
+    std::ofstream file{"inputs/input3.txt", std::ios::binary};
+    std::string input = json["3"].get<std::string>();
+
+    file << input;
+  }
+}
+
 void ec::Runtime::run() {
+  if (do_download_inputs) {
+    download_inputs();
+  }
+
   if (interactive == false) {
     run_noninteractive(*this);
   } else {

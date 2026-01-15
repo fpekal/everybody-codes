@@ -9,7 +9,10 @@
     pkgs = nixpkgs.legacyPackages.x86_64-linux;
   in {
     packages.x86_64-linux = {
-      everybody-codes = pkgs.callPackage ./framework/default.nix {};
+      utils = pkgs.callPackage ./utils/default.nix {};
+      everybody-codes = pkgs.callPackage ./framework/default.nix {
+        inherit (self.packages.x86_64-linux) utils;
+      };
       default = self.packages.x86_64-linux.everybody-codes;
     };
 
