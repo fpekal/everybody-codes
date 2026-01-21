@@ -321,7 +321,9 @@ static void run_interactive(const ec::Runtime &rt) {
   }
 }
 
-static void run_tests(const ec::Runtime &rt, const ec::Part &part) {
+static bool run_tests(const ec::Runtime &rt, const ec::Part &part) {
+  bool all_passed = true;
+
   if (rt.non_interactive_test_to_run == -1) { // Run all tests
     if (part.tests.size() == 0) {
       std::println("WARNING: no tests");
@@ -336,6 +338,7 @@ static void run_tests(const ec::Runtime &rt, const ec::Part &part) {
         std::print("{}✔️{} ", ansi_color(2), ansi_reset());
       } else {
         std::print("{}{}X {} ", ansi_color(1), ansi_bold(), ansi_reset());
+        all_passed = false;
       }
 
       std::print("{} -> {}{}{} - {}{}ms{}", test.filename, ansi_color(123),
@@ -351,13 +354,13 @@ static void run_tests(const ec::Runtime &rt, const ec::Part &part) {
   } else {
     if (part.tests.size() == 0) {
       std::println("ERROR: no tests");
-      return;
+      return false;
     }
     if (rt.non_interactive_test_to_run > part.tests.size() - 1) {
       std::println(
           "ERROR: test number should be less than tests count ({}), not {}",
           part.tests.size(), rt.non_interactive_test_to_run);
-      return;
+      return false;
     }
 
     auto &test = part.tests.at(rt.non_interactive_test_to_run);
@@ -369,6 +372,7 @@ static void run_tests(const ec::Runtime &rt, const ec::Part &part) {
       std::print("{}✔️{} ", ansi_color(2), ansi_reset());
     } else {
       std::print("{}{}X {} ", ansi_color(1), ansi_bold(), ansi_reset());
+      all_passed = false;
     }
 
     std::print("{} -> {}{}{} - {}{}ms{}", test.filename, ansi_color(123),
@@ -381,30 +385,33 @@ static void run_tests(const ec::Runtime &rt, const ec::Part &part) {
 
     std::println();
   }
+
+  return all_passed;
 }
 
-static void run_noninteractive(const ec::Runtime &rt) {
+static bool run_noninteractive(const ec::Runtime &rt) {
   if (rt.non_interactive_part == 0) {
     std::println("ERROR: part number not set");
-    return;
+    return false;
   }
 
   auto &part = get_part_n(rt, rt.non_interactive_part);
 
   if (!part.impl) {
     std::println("ERROR: part {} is not defined", rt.non_interactive_part);
-    return;
+    return false;
   }
 
   if (rt.non_interactive_run_tests) {
-    run_tests(rt, part);
-    return;
+    return run_tests(rt, part);
   }
 
   auto [result, milliseconds] = run(part, part.input);
 
   std::println("{}{}{} - {}{}ms{}", ansi_color(123), result, ansi_reset(),
                ansi_color(242), milliseconds, ansi_reset());
+
+  return true;
 }
 
 static std::string exec(const char *cmd) {
@@ -459,14 +466,15 @@ static void download_inputs() {
   }
 }
 
-void ec::Runtime::run() {
+bool ec::Runtime::run() {
   if (do_download_inputs) {
     download_inputs();
   }
 
   if (interactive == false) {
-    run_noninteractive(*this);
+    return run_noninteractive(*this);
   } else {
     run_interactive(*this);
+    return true;
   }
 }

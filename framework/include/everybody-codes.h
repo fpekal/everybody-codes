@@ -19,7 +19,7 @@ class Runtime {
 public:
   Runtime(int argc, char *argv[]);
 
-  void run();
+  bool run();
 
   Part part1;
   Part part2;
